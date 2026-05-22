@@ -304,10 +304,9 @@ export const RoomProvider = ({ children }: { children: ReactNode }) => {
       }, 1500);
       setRoom(null);
       setDrawerWord(null);
-      setPlayerId("");
       setLastRoomCode("");
       setSocketError(null);
-      saveSession({ playerId: "", roomCode: "" });
+      saveSession({ roomCode: "" });
     },
     [socket, room?.roomCode, lastRoomCode]
   );
@@ -435,9 +434,8 @@ export const RoomProvider = ({ children }: { children: ReactNode }) => {
       if (message.toLowerCase().includes("room not found")) {
         setRoom(null);
         setDrawerWord(null);
-        setPlayerId("");
         setLastRoomCode("");
-        saveSession({ playerId: "", roomCode: "" });
+        saveSession({ roomCode: "" });
       }
     });
 
