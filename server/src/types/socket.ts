@@ -1,17 +1,17 @@
 import type { GamePhase, Stroke, StrokePoint, ToolType } from "./game";
-import type { LeaderboardEntry, PlayerPublic, RoomPublicState } from "./room";
+import type {
+  LeaderboardEntry,
+  PlayerPublic,
+  RoomPublicState,
+  RoomSettings
+} from "./room";
 
 export interface CreateRoomPayload {
   name: string;
   playerName: string;
   isPrivate?: boolean;
   maxPlayers?: number;
-  roundsPerPlayer?: number;
-  roundDurationSec?: number;
-  chooseDurationSec?: number;
-  hintIntervalSec?: number;
-  wordOptionsCount?: number;
-  maxHints?: number;
+  settings?: Partial<RoomSettings>;
 }
 
 export interface JoinRoomPayload {
@@ -79,6 +79,15 @@ export interface CanvasClearPayload {
 
 export interface RequestStatePayload {
   roomCode: string;
+}
+
+export interface UpdateRoomSettingsPayload {
+  roomCode: string;
+  settings: RoomSettings;
+}
+
+export interface RoomSettingsUpdatedPayload {
+  settings: RoomSettings;
 }
 
 export interface RoomCreatedPayload {
@@ -251,6 +260,7 @@ export interface ServerToClientEvents {
   round_started: (payload: RoundStartedPayload) => void;
   word_options: (payload: WordOptionsPayload) => void;
   word_selected: (payload: WordSelectedPayload) => void;
+  room_settings_updated: (payload: RoomSettingsUpdatedPayload) => void;
   timer_tick: (payload: TimerTickPayload) => void;
   hint_update: (payload: HintUpdatePayload) => void;
   round_ended: (payload: RoundEndedPayload) => void;
@@ -286,6 +296,7 @@ export interface ClientToServerEvents {
   fill_area: (payload: FillAreaPayload) => void;
   return_to_lobby: (payload: { roomCode: string }) => void;
   request_state: (payload: RequestStatePayload) => void;
+  update_room_settings: (payload: UpdateRoomSettingsPayload) => void;
 }
 
 export interface InterServerEvents {}

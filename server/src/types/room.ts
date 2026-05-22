@@ -11,12 +11,12 @@ export interface PlayerPublic {
 
 export interface RoomSettings {
   maxPlayers: number;
-  roundsPerPlayer: number;
-  roundDurationSec: number;
-  chooseDurationSec: number;
-  hintIntervalSec: number;
-  wordOptionsCount: number;
-  maxHints: number;
+  rounds: number;
+  drawTime: number;
+  wordChoices: number;
+  hintsEnabled: boolean;
+  hintCount: number;
+  wordMode: "normal" | "hidden" | "combination";
 }
 
 export interface LeaderboardEntry {
