@@ -7,6 +7,7 @@ export class Player {
   public score: number;
   public isHost: boolean;
   public isConnected: boolean;
+  public disconnectedAt: number | null;
   public hasGuessedCorrectly: boolean;
   public lastActiveAt: number;
 
@@ -22,6 +23,7 @@ export class Player {
     this.score = 0;
     this.isHost = params.isHost ?? false;
     this.isConnected = true;
+    this.disconnectedAt = null;
     this.hasGuessedCorrectly = false;
     this.lastActiveAt = Date.now();
   }

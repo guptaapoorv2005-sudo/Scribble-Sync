@@ -91,6 +91,10 @@ export class Room {
     return this.getPlayers().filter((player) => player.isConnected);
   }
 
+  public getDisconnectedPlayers(): Player[] {
+    return this.getPlayers().filter((player) => !player.isConnected);
+  }
+
   public getConnectedPlayerIds(): string[] {
     return this.getConnectedPlayers().map((player) => player.id);
   }

@@ -116,6 +116,10 @@ export interface PlayerJoinedPayload {
   reconnected: boolean;
 }
 
+export interface PlayerReconnectedPayload {
+  player: PlayerPublic;
+}
+
 export interface PlayerLeftPayload {
   playerId: string;
   reason: "left" | "disconnected" | "timeout" | "kicked";
@@ -255,6 +259,7 @@ export interface ServerToClientEvents {
   room_joined: (payload: RoomJoinedPayload) => void;
   sync_state: (payload: SyncStatePayload) => void;
   player_joined: (payload: PlayerJoinedPayload) => void;
+  player_reconnected: (payload: PlayerReconnectedPayload) => void;
   player_left: (payload: PlayerLeftPayload) => void;
   host_changed: (payload: HostChangedPayload) => void;
   game_started: (payload: GameStartedPayload) => void;

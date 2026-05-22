@@ -30,6 +30,8 @@ interface RoomEntry {
   timers: TimerManager;
 }
 
+type LeaveReason = "left" | "timeout" | "disconnected";
+
 export class RoomManager {
   private readonly io: Server<ClientToServerEvents, ServerToClientEvents>;
   private readonly rooms = new Map<string, RoomEntry>();
@@ -124,22 +126,24 @@ export class RoomManager {
       throw new Error("Invalid player name");
     }
 
-    if (payload.playerId) {
-      const existing = room.getPlayer(payload.playerId);
-      if (existing) {
-        this.rebindSocket(existing, socket, roomCode);
-        existing.isConnected = true;
-        existing.lastActiveAt = Date.now();
-        this.emitPlayerJoin(room, existing, true);
-        socket.join(room.code);
-        console.log("[ROOM_JOIN]", {
-          roomId: room.code,
-          socketId: socket.id,
-          playerId: existing.id,
-          rooms: Array.from(socket.rooms.values())
-        });
-        return { entry, player: existing, reconnected: true };
-      }
+    const reconnectingPlayer = this.findReconnectablePlayer(room, payload);
+    if (reconnectingPlayer) {
+      this.rebindSocket(reconnectingPlayer, socket, roomCode);
+      reconnectingPlayer.isConnected = true;
+      reconnectingPlayer.disconnectedAt = null;
+      reconnectingPlayer.lastActiveAt = Date.now();
+      this.emitPlayerJoin(room, reconnectingPlayer, true);
+      this.io.to(room.code).emit("player_reconnected", {
+        player: reconnectingPlayer.toPublic()
+      });
+      socket.join(room.code);
+      console.log("[ROOM_JOIN]", {
+        roomId: room.code,
+        socketId: socket.id,
+        playerId: reconnectingPlayer.id,
+        rooms: Array.from(socket.rooms.values())
+      });
+      return { entry, player: reconnectingPlayer, reconnected: true };
     }
 
     if (room.getPlayers().length >= room.settings.maxPlayers) {
@@ -175,7 +179,9 @@ export class RoomManager {
   ): { entry: RoomEntry; player: Player; reconnected: boolean } {
     const publicRooms = Array.from(this.rooms.values()).filter(({ room }) => {
       if (!room.isPublic) return false;
-      return room.isJoinable();
+      if (room.phase === "game_over") return false;
+      if (!room.isJoinable()) return false;
+      return room.getConnectedPlayers().length > 0;
     });
 
     const targetRoom = publicRooms[0]?.room;
@@ -192,17 +198,16 @@ export class RoomManager {
     throw new Error("NO_PUBLIC_ROOM_AVAILABLE");
   }
 
-  public leaveRoom(
-    roomCode: string,
-    playerId: string,
-    reason: "left" | "timeout" = "left"
-  ): void {
+  public leaveRoom(roomCode: string, playerId: string, reason: LeaveReason = "left"): void {
     const entry = this.rooms.get(roomCode);
     if (!entry) return;
 
     const room = entry.room;
     const player = room.removePlayer(playerId);
     if (!player) return;
+
+    player.isConnected = false;
+    player.disconnectedAt = null;
 
     console.log("[PLAYER_REMOVED]", {
       roomId: room.code,
@@ -211,43 +216,36 @@ export class RoomManager {
     });
 
     room.syncTurnOrder();
-    this.socketIndex.forEach((value, socketId) => {
-      if (value.playerId === playerId && value.roomCode === roomCode) {
-        this.socketIndex.delete(socketId);
-      }
-    });
+    this.clearSocketBindings(roomCode, playerId);
 
     if (room.hostId === playerId) {
       room.ensureHost();
       this.io.to(room.code).emit("host_changed", { hostId: room.hostId });
     }
 
-    const shouldEmit = !(reason === "timeout" && player.isConnected === false);
-    if (shouldEmit) {
-      this.io.to(room.code).emit("player_left", {
-        playerId,
-        reason
-      });
+    this.io.to(room.code).emit("player_left", {
+      playerId,
+      reason
+    });
 
-      const message =
-        reason === "timeout"
-          ? `${player.name} disconnected`
-          : `${player.name} left the room`;
-      this.io.to(room.code).emit("chat_message", {
-        id: `sys-${Date.now()}-${player.id}`,
-        playerId: null,
-        name: "System",
-        message,
-        isSystem: true,
-        type: "system",
-        variant: "leave",
-        createdAt: Date.now()
-      });
-    }
+    const message =
+      reason === "left"
+        ? `${player.name} left the room`
+        : `${player.name} disconnected`;
+    this.io.to(room.code).emit("chat_message", {
+      id: `sys-${Date.now()}-${player.id}`,
+      playerId: null,
+      name: "System",
+      message,
+      isSystem: true,
+      type: "system",
+      variant: "leave",
+      createdAt: Date.now()
+    });
 
     entry.game.handlePlayerRemoved(playerId);
 
-    if (room.getPlayers().length === 0) {
+    if (room.getPlayers().length === 0 || (room.isPublic && room.getConnectedPlayers().length === 0)) {
       this.cleanupRoom(room.code);
     }
   }
@@ -256,22 +254,22 @@ export class RoomManager {
     const entry = this.socketIndex.get(socketId);
     if (!entry) return;
 
+    this.socketIndex.delete(socketId);
+
     const roomEntry = this.rooms.get(entry.roomCode);
     if (!roomEntry) return;
 
     const player = roomEntry.room.getPlayer(entry.playerId);
     if (!player) return;
 
-    player.isConnected = false;
-    player.lastActiveAt = Date.now();
+    if (roomEntry.room.isPublic) {
+      this.leaveRoom(entry.roomCode, player.id, "disconnected");
+      return;
+    }
 
-    roomEntry.timers.setTimeout(
-      `disconnect-${player.id}`,
-      () => {
-        this.leaveRoom(entry.roomCode, player.id, "timeout");
-      },
-      env.disconnectGraceMs
-    );
+    player.isConnected = false;
+    player.disconnectedAt = Date.now();
+    player.lastActiveAt = Date.now();
 
     this.io.to(entry.roomCode).emit("player_left", {
       playerId: player.id,
@@ -297,6 +295,14 @@ export class RoomManager {
     }
 
     roomEntry.game.handlePlayerRemoved(player.id);
+
+    roomEntry.timers.setTimeout(
+      `disconnect-${player.id}`,
+      () => {
+        this.leaveRoom(entry.roomCode, player.id, "timeout");
+      },
+      env.disconnectGraceMs
+    );
   }
 
   public startGame(roomCode: string, playerId: string): void {
@@ -712,6 +718,33 @@ export class RoomManager {
     this.trackSocket(roomCode, player.id, socket);
   }
 
+  private findReconnectablePlayer(
+    room: Room,
+    payload: JoinRoomPayload
+  ): Player | undefined {
+    if (payload.playerId) {
+      const existingById = room.getPlayer(payload.playerId);
+      if (existingById) {
+        return existingById;
+      }
+    }
+
+    const playerName = sanitizeName(payload.playerName);
+    if (!playerName) {
+      return undefined;
+    }
+
+    return room.getDisconnectedPlayers().find((player) => player.name === playerName);
+  }
+
+  private clearSocketBindings(roomCode: string, playerId: string): void {
+    for (const [socketId, value] of this.socketIndex.entries()) {
+      if (value.roomCode === roomCode && value.playerId === playerId) {
+        this.socketIndex.delete(socketId);
+      }
+    }
+  }
+
   private trackSocket(
     roomCode: string,
     playerId: string,
@@ -728,11 +761,20 @@ export class RoomManager {
 
     entry.game.clearTimers();
     entry.timers.clearAll();
+    this.clearRoomSocketBindings(roomCode);
     this.rooms.delete(roomCode);
     console.log("[ROOM_CLEANUP]", {
       roomId: roomCode,
       remainingRooms: this.rooms.size
     });
+  }
+
+  private clearRoomSocketBindings(roomCode: string): void {
+    for (const [socketId, value] of this.socketIndex.entries()) {
+      if (value.roomCode === roomCode) {
+        this.socketIndex.delete(socketId);
+      }
+    }
   }
 
   private generateUniqueRoomCode(): string {
