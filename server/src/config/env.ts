@@ -31,12 +31,19 @@ const parseStringList = (
   return parts.length ? parts : fallback;
 };
 
+const defaultProductionCorsOrigins = [
+  "https://*.vercel.app",
+  "https://*.onrender.com"
+];
+
 export const env = {
   nodeEnv: process.env.NODE_ENV ?? "development",
   port: parseNumber(process.env.PORT, 4000, 1, 65535),
   corsOrigins: parseStringList(
     process.env.CORS_ORIGIN,
-    process.env.NODE_ENV === "development" ? ["http://localhost:5173"] : []
+    process.env.NODE_ENV === "development"
+      ? ["http://localhost:5173"]
+      : defaultProductionCorsOrigins
   ),
   maxPlayers: parseNumber(
     process.env.MAX_PLAYERS,

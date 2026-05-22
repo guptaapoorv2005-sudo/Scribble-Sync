@@ -17,12 +17,44 @@ import type {
 const app = express();
 
 const corsOrigins = env.corsOrigins;
-const allowAnyOrigin = corsOrigins === "*" && env.nodeEnv !== "production";
-const resolvedCorsOrigins =
-  corsOrigins === "*" ? (allowAnyOrigin ? "*" : []) : corsOrigins;
+const allowAnyOrigin = corsOrigins === "*";
+
+const originIsAllowed = (origin: string): boolean => {
+  if (allowAnyOrigin) return true;
+
+  return corsOrigins.some((allowedOrigin) => {
+    if (allowedOrigin === origin) return true;
+
+    if (!allowedOrigin.startsWith("https://*.") && !allowedOrigin.startsWith("http://*.")) {
+      return false;
+    }
+
+    try {
+      const allowedUrl = new URL(allowedOrigin.replace("*.", "placeholder."));
+      const originUrl = new URL(origin);
+      if (allowedUrl.protocol !== originUrl.protocol) return false;
+
+      const allowedHost = allowedUrl.hostname.replace("placeholder.", "");
+      return originUrl.hostname === allowedHost || originUrl.hostname.endsWith(`.${allowedHost}`);
+    } catch {
+      return false;
+    }
+  });
+};
+
+const corsOriginOption = allowAnyOrigin
+  ? "*"
+  : (origin: string | undefined, callback: (error: Error | null, allow?: boolean) => void) => {
+      if (!origin) {
+        callback(null, false);
+        return;
+      }
+
+      callback(null, originIsAllowed(origin));
+    };
 app.use(
   cors({
-    origin: allowAnyOrigin ? "*" : resolvedCorsOrigins,
+    origin: corsOriginOption,
     credentials: !allowAnyOrigin
   })
 );
@@ -43,7 +75,7 @@ const io = new Server<
   SocketData
 >(httpServer, {
   cors: {
-    origin: allowAnyOrigin ? "*" : resolvedCorsOrigins,
+    origin: corsOriginOption,
     methods: ["GET", "POST"],
     credentials: !allowAnyOrigin
   }
