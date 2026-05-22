@@ -17,10 +17,12 @@ import type {
 const app = express();
 
 const corsOrigins = env.corsOrigins;
-const allowAnyOrigin = corsOrigins === "*";
+const allowAnyOrigin = corsOrigins === "*" && env.nodeEnv !== "production";
+const resolvedCorsOrigins =
+  corsOrigins === "*" ? (allowAnyOrigin ? "*" : []) : corsOrigins;
 app.use(
   cors({
-    origin: allowAnyOrigin ? "*" : corsOrigins,
+    origin: allowAnyOrigin ? "*" : resolvedCorsOrigins,
     credentials: !allowAnyOrigin
   })
 );
@@ -41,7 +43,7 @@ const io = new Server<
   SocketData
 >(httpServer, {
   cors: {
-    origin: allowAnyOrigin ? "*" : corsOrigins,
+    origin: allowAnyOrigin ? "*" : resolvedCorsOrigins,
     methods: ["GET", "POST"],
     credentials: !allowAnyOrigin
   }

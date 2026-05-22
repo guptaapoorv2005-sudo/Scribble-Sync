@@ -34,7 +34,10 @@ const parseStringList = (
 export const env = {
   nodeEnv: process.env.NODE_ENV ?? "development",
   port: parseNumber(process.env.PORT, 4000, 1, 65535),
-  corsOrigins: parseStringList(process.env.CORS_ORIGIN, ["*"]),
+  corsOrigins: parseStringList(
+    process.env.CORS_ORIGIN,
+    process.env.NODE_ENV === "development" ? ["http://localhost:5173"] : []
+  ),
   maxPlayers: parseNumber(
     process.env.MAX_PLAYERS,
     GAME_DEFAULTS.maxPlayers,
