@@ -12,8 +12,8 @@ export class Room {
   public readonly id: string;
   public readonly code: string;
   public name: string;
+  public isPublic: boolean;
   public isPrivate: boolean;
-  public maxPlayers: number;
   public hostId: string;
   public phase: GamePhase;
   public players: Map<string, Player>;
@@ -38,16 +38,16 @@ export class Room {
     id: string;
     code: string;
     name: string;
+    isPublic: boolean;
     isPrivate: boolean;
-    maxPlayers: number;
     hostId: string;
     settings: RoomSettings;
   }) {
     this.id = params.id;
     this.code = params.code;
     this.name = params.name;
+    this.isPublic = params.isPublic;
     this.isPrivate = params.isPrivate;
-    this.maxPlayers = params.maxPlayers;
     this.hostId = params.hostId;
     this.phase = "lobby";
     this.players = new Map();
@@ -154,6 +154,7 @@ export class Room {
     return {
       roomCode: this.code,
       name: this.name,
+      isPublic: this.isPublic,
       isPrivate: this.isPrivate,
       hostId: this.hostId,
       phase: this.phase,
@@ -187,5 +188,9 @@ export class Room {
 
   public canStartGame(): boolean {
     return this.getConnectedPlayers().length >= GAME_DEFAULTS.minPlayers;
+  }
+
+  public isJoinable(): boolean {
+    return this.getPlayers().length < this.settings.maxPlayers && this.phase !== "game_over";
   }
 }

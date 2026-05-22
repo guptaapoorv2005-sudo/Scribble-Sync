@@ -29,6 +29,7 @@ export interface LeaderboardEntry {
 export interface RoomPublicState {
   roomCode: string;
   name: string;
+  isPublic: boolean;
   isPrivate: boolean;
   hostId: string;
   phase: GamePhase;

@@ -11,7 +11,8 @@ import type {
   CreateRoomPayload,
   FillAreaPayload,
   JoinRoomPayload,
-  QuickPlayPayload
+  QuickPlayPayload,
+  RoomSettingsUpdatedPayload
 } from "../types/socket";
 import type { Stroke } from "../types/game";
 import { Player } from "../models/Player";
@@ -21,6 +22,7 @@ import { sanitizeName, sanitizeText } from "../utils/sanitize";
 import { WordService } from "../services/WordService";
 import { GameManager } from "../game/GameManager";
 import { TimerManager } from "./TimerManager";
+import type { RoomSettings } from "../types/room";
 
 interface RoomEntry {
   room: Room;
@@ -55,23 +57,25 @@ export class RoomManager {
       throw new Error("Invalid player name");
     }
 
-    const maxPlayers = payload.maxPlayers ?? env.maxPlayers;
-    const settings = {
-      maxPlayers,
-      roundsPerPlayer: payload.roundsPerPlayer ?? env.roundsPerPlayer,
-      roundDurationSec: payload.roundDurationSec ?? env.roundDurationSec,
-      chooseDurationSec: payload.chooseDurationSec ?? env.chooseDurationSec,
-      hintIntervalSec: payload.hintIntervalSec ?? env.hintIntervalSec,
-      wordOptionsCount: payload.wordOptionsCount ?? env.wordOptionsCount,
-      maxHints: payload.maxHints ?? env.maxHints
-    };
+    const isPublic =
+      payload.isPublic ?? (payload.isPrivate === undefined ? false : !payload.isPrivate);
+
+    const settings = this.normalizeSettings({
+      maxPlayers: payload.maxPlayers ?? env.maxPlayers,
+      rounds: payload.settings?.rounds ?? env.rounds,
+      drawTime: payload.settings?.drawTime ?? env.drawTime,
+      wordChoices: payload.settings?.wordChoices ?? env.wordChoices,
+      hintsEnabled: payload.settings?.hintsEnabled ?? env.hintsEnabled,
+      hintCount: payload.settings?.hintCount ?? env.hintCount,
+      wordMode: payload.settings?.wordMode ?? env.wordMode
+    });
 
     const room = new Room({
       id: uuidv4(),
       code: roomCode,
       name: sanitizeText(payload.name, 40) || `Room ${roomCode}`,
-      isPrivate: payload.isPrivate ?? false,
-      maxPlayers,
+      isPublic,
+      isPrivate: !isPublic,
       hostId: "",
       settings
     });
@@ -138,7 +142,7 @@ export class RoomManager {
       }
     }
 
-    if (room.getPlayers().length >= room.maxPlayers) {
+    if (room.getPlayers().length >= room.settings.maxPlayers) {
       throw new Error("Room is full");
     }
 
@@ -170,8 +174,8 @@ export class RoomManager {
     socket: Socket<ClientToServerEvents, ServerToClientEvents, Record<string, never>, SocketData>
   ): { entry: RoomEntry; player: Player; reconnected: boolean } {
     const publicRooms = Array.from(this.rooms.values()).filter(({ room }) => {
-      if (room.isPrivate) return false;
-      return room.getPlayers().length < room.maxPlayers;
+      if (!room.isPublic) return false;
+      return room.isJoinable();
     });
 
     const targetRoom = publicRooms[0]?.room;
@@ -185,22 +189,7 @@ export class RoomManager {
       );
     }
 
-    const roomName = payload.roomName?.trim() || "Quick Play";
-    const entry = this.createRoom(
-      {
-        name: roomName,
-        playerName: payload.playerName,
-        isPrivate: false
-      },
-      socket
-    );
-
-    const host = entry.room.getPlayer(entry.room.hostId);
-    if (!host) {
-      throw new Error("Unable to create room");
-    }
-
-    return { entry, player: host, reconnected: false };
+    throw new Error("NO_PUBLIC_ROOM_AVAILABLE");
   }
 
   public leaveRoom(
@@ -241,7 +230,7 @@ export class RoomManager {
       });
 
       const message =
-        reason === "disconnected"
+        reason === "timeout"
           ? `${player.name} disconnected`
           : `${player.name} left the room`;
       this.io.to(room.code).emit("chat_message", {
@@ -314,6 +303,35 @@ export class RoomManager {
     const entry = this.rooms.get(roomCode);
     if (!entry) throw new Error("Room not found");
     entry.game.startGame(playerId);
+  }
+
+  public updateRoomSettings(
+    roomCode: string,
+    playerId: string,
+    settings: RoomSettings
+  ): RoomSettings {
+    const entry = this.rooms.get(roomCode);
+    if (!entry) {
+      throw new Error("Room not found");
+    }
+
+    const room = entry.room;
+    if (room.hostId !== playerId) {
+      throw new Error("Only the host can modify room settings");
+    }
+
+    if (room.phase !== "lobby") {
+      throw new Error("Room settings can only be changed in the lobby");
+    }
+
+    const nextSettings = this.normalizeSettings(settings, room.getPlayers().length);
+    room.settings = nextSettings;
+
+    this.io.to(room.code).emit("room_settings_updated", {
+      settings: room.settings
+    });
+
+    return room.settings;
   }
 
   public selectWord(roomCode: string, playerId: string, word: string): void {
@@ -723,5 +741,38 @@ export class RoomManager {
       code = generateRoomCode();
     }
     return code;
+  }
+
+  private normalizeSettings(
+    settings: Partial<RoomSettings>,
+    currentPlayerCount = 0
+  ): RoomSettings {
+    const normalized: RoomSettings = {
+      maxPlayers: this.clampInt(settings.maxPlayers ?? env.maxPlayers, 2, 20),
+      rounds: this.clampInt(settings.rounds ?? env.rounds, 2, 10),
+      drawTime: this.clampInt(settings.drawTime ?? env.drawTime, 15, 240),
+      wordChoices: this.clampInt(settings.wordChoices ?? env.wordChoices, 1, 5),
+      hintsEnabled: Boolean(settings.hintsEnabled ?? env.hintsEnabled),
+      hintCount: this.clampInt(settings.hintCount ?? env.hintCount, 1, 10),
+      wordMode: this.normalizeWordMode(settings.wordMode ?? env.wordMode)
+    };
+
+    if (normalized.maxPlayers < currentPlayerCount) {
+      throw new Error("Max players cannot be lower than the current room size");
+    }
+
+    return normalized;
+  }
+
+  private normalizeWordMode(
+    value: RoomSettings["wordMode"] | string
+  ): RoomSettings["wordMode"] {
+    if (value === "hidden" || value === "combination") return value;
+    return "normal";
+  }
+
+  private clampInt(value: number, min: number, max: number): number {
+    const rounded = Math.round(value);
+    return Math.min(Math.max(rounded, min), max);
   }
 }
