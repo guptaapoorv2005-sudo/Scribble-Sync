@@ -7,18 +7,25 @@ import type {
 } from "../types/socket";
 import { validatePayload } from "../utils/validation";
 import { RoomManager } from "../managers/RoomManager";
+import type { RoomSettings } from "../types/room";
 
 const createRoomSchema = z.object({
   name: z.string().min(1).max(40),
   playerName: z.string().min(1).max(24),
+  isPublic: z.boolean().optional(),
   isPrivate: z.boolean().optional(),
   maxPlayers: z.number().int().min(2).max(20).optional(),
-  roundsPerPlayer: z.number().int().min(1).max(10).optional(),
-  roundDurationSec: z.number().int().min(30).max(300).optional(),
-  chooseDurationSec: z.number().int().min(5).max(60).optional(),
-  hintIntervalSec: z.number().int().min(5).max(60).optional(),
-  wordOptionsCount: z.number().int().min(2).max(6).optional(),
-  maxHints: z.number().int().min(1).max(8).optional()
+  settings: z
+    .object({
+      rounds: z.number().int().min(2).max(10).optional(),
+      drawTime: z.number().int().min(15).max(240).optional(),
+      wordChoices: z.number().int().min(1).max(5).optional(),
+      hintsEnabled: z.boolean().optional(),
+      hintCount: z.number().int().min(1).max(10).optional(),
+      wordMode: z.enum(["normal", "hidden", "combination"]).optional()
+    })
+    .partial()
+    .optional()
 });
 
 const joinRoomSchema = z.object({
@@ -114,6 +121,19 @@ const requestStateSchema = z.object({
   roomCode: z.string().min(4).max(8)
 });
 
+const updateRoomSettingsSchema = z.object({
+  roomCode: z.string().min(4).max(8),
+  settings: z.object({
+    maxPlayers: z.number().int().min(2).max(20),
+    rounds: z.number().int().min(2).max(10),
+    drawTime: z.number().int().min(15).max(240),
+    wordChoices: z.number().int().min(1).max(5),
+    hintsEnabled: z.boolean(),
+    hintCount: z.number().int().min(0).max(10),
+    wordMode: z.enum(["normal", "hidden", "combination"])
+  })
+});
+
 export class SocketHandler {
   private readonly io: Server<ClientToServerEvents, ServerToClientEvents>;
   private readonly roomManager: RoomManager;
@@ -148,6 +168,36 @@ export class SocketHandler {
               room: entry.room.getPublicState(),
               playerId: entry.room.hostId
             });
+          } catch (error) {
+            this.emitError(socket, (error as Error).message);
+          }
+        });
+
+        socket.on("update_room_settings", (payload) => {
+          const validation = validatePayload(updateRoomSettingsSchema, payload);
+          if (!validation.ok) {
+            this.emitError(socket, validation.error);
+            return;
+          }
+
+          const playerId = this.roomManager.getPlayerIdBySocket(socket.id);
+          if (!playerId) {
+            this.emitError(socket, "Player not found");
+            return;
+          }
+
+          try {
+            const roomCode = this.resolveRoomCode(
+              socket,
+              validation.data.roomCode
+            );
+            if (!roomCode) return;
+
+            this.roomManager.updateRoomSettings(
+              roomCode,
+              playerId,
+              validation.data.settings as RoomSettings
+            );
           } catch (error) {
             this.emitError(socket, (error as Error).message);
           }
@@ -200,7 +250,17 @@ export class SocketHandler {
               result.player.id
             );
           } catch (error) {
-            this.emitError(socket, (error as Error).message);
+            const message = (error as Error).message;
+            if (message === "NO_PUBLIC_ROOM_AVAILABLE") {
+              this.emitError(
+                socket,
+                "NO_PUBLIC_ROOM_AVAILABLE",
+                "NO_PUBLIC_ROOM_AVAILABLE"
+              );
+              return;
+            }
+
+            this.emitError(socket, message);
           }
         });
 
@@ -524,11 +584,12 @@ export class SocketHandler {
 
   private emitError(
     socket: Socket<ClientToServerEvents, ServerToClientEvents>,
-    message: string
+    message: string,
+    code = "BAD_REQUEST"
   ): void {
     socket.emit("socket_error", {
       message,
-      code: "BAD_REQUEST"
+      code
     });
   }
 

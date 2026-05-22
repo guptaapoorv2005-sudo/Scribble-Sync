@@ -9,6 +9,7 @@ import type {
 export interface CreateRoomPayload {
   name: string;
   playerName: string;
+  isPublic?: boolean;
   isPrivate?: boolean;
   maxPlayers?: number;
   settings?: Partial<RoomSettings>;
