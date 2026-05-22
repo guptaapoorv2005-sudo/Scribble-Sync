@@ -35,48 +35,36 @@ export const env = {
   nodeEnv: process.env.NODE_ENV ?? "development",
   port: parseNumber(process.env.PORT, 4000, 1, 65535),
   corsOrigins: parseStringList(process.env.CORS_ORIGIN, ["*"]),
-  roundDurationSec: parseNumber(
-    process.env.ROUND_DURATION_SEC,
-    GAME_DEFAULTS.roundDurationSec,
-    30,
-    300
-  ),
-  chooseDurationSec: parseNumber(
-    process.env.CHOOSE_DURATION_SEC,
-    GAME_DEFAULTS.chooseDurationSec,
-    5,
-    60
-  ),
-  hintIntervalSec: parseNumber(
-    process.env.HINT_INTERVAL_SEC,
-    GAME_DEFAULTS.hintIntervalSec,
-    5,
-    60
-  ),
-  roundsPerPlayer: parseNumber(
-    process.env.ROUNDS_PER_PLAYER,
-    GAME_DEFAULTS.roundsPerPlayer,
-    1,
-    10
-  ),
   maxPlayers: parseNumber(
     process.env.MAX_PLAYERS,
     GAME_DEFAULTS.maxPlayers,
     2,
     20
   ),
-  wordOptionsCount: parseNumber(
-    process.env.WORD_OPTIONS_COUNT,
-    GAME_DEFAULTS.wordOptionsCount,
-    2,
-    6
+  rounds: parseNumber(process.env.ROUNDS, GAME_DEFAULTS.rounds, 2, 10),
+  drawTime: parseNumber(
+    process.env.DRAW_TIME_SEC,
+    GAME_DEFAULTS.drawTime,
+    15,
+    240
   ),
-  maxHints: parseNumber(
-    process.env.MAX_HINTS,
-    GAME_DEFAULTS.maxHints,
+  wordChoices: parseNumber(
+    process.env.WORD_CHOICES,
+    GAME_DEFAULTS.wordChoices,
     1,
-    8
+    5
   ),
+  hintsEnabled: process.env.HINTS_ENABLED
+    ? process.env.HINTS_ENABLED === "true"
+    : GAME_DEFAULTS.hintsEnabled,
+  hintCount: parseNumber(
+    process.env.HINT_COUNT,
+    GAME_DEFAULTS.hintCount,
+    1,
+    10
+  ),
+  wordMode: (process.env.WORD_MODE as "normal" | "hidden" | "combination" | undefined) ??
+    GAME_DEFAULTS.wordMode,
   disconnectGraceMs: parseNumber(
     process.env.DISCONNECT_GRACE_MS,
     GAME_DEFAULTS.disconnectGraceMs,
