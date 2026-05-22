@@ -44,8 +44,7 @@ export class GameManager {
     this.room.turnOrder = this.room.getConnectedPlayerIds();
     this.room.turnIndex = 0;
     this.room.roundNumber = 0;
-    this.room.totalRounds =
-      this.room.settings.roundsPerPlayer * this.room.turnOrder.length;
+    this.room.totalRounds = this.room.settings.rounds;
 
     this.logState("[ROOM_STATE]", { initiatorId });
 
@@ -91,7 +90,7 @@ export class GameManager {
 
     this.logState("[PHASE_CHANGED]", { phase: this.room.phase });
 
-    const roundDurationMs = this.room.settings.roundDurationSec * 1000;
+    const roundDurationMs = this.room.settings.drawTime * 1000;
     this.room.roundEndsAt = Date.now() + roundDurationMs;
 
     this.timers.clearTimeout("choose_timeout");
@@ -102,7 +101,7 @@ export class GameManager {
       maskedWord: this.room.maskedWord,
       wordLength: selected.length,
       drawerId: playerId,
-      roundDurationSec: this.room.settings.roundDurationSec
+      roundDurationSec: this.room.settings.drawTime
     };
 
     if (drawerSocketId) {
@@ -131,14 +130,14 @@ export class GameManager {
       this.endRound("time_up");
     }, roundDurationMs);
 
-    const hintIntervalMs = this.room.settings.hintIntervalSec * 1000;
-    if (hintIntervalMs > 0) {
+    if (this.room.settings.hintsEnabled && this.room.settings.hintCount > 0) {
+      const hintIntervalMs = Math.max(5, Math.floor(this.room.settings.drawTime / (this.room.settings.hintCount + 1))) * 1000;
       this.timers.setInterval("hint_tick", () => {
         if (!this.room.currentWord) return;
         const revealed = this.wordService.revealRandomLetter(
           this.room.currentWord,
           this.room.revealedIndices,
-          this.room.settings.maxHints
+          this.room.settings.hintCount
         );
         if (!revealed) {
           this.timers.clearInterval("hint_tick");
@@ -330,8 +329,7 @@ export class GameManager {
       return;
     }
 
-    this.room.totalRounds =
-      this.room.settings.roundsPerPlayer * this.room.turnOrder.length;
+    this.room.totalRounds = this.room.settings.rounds;
 
     if (this.room.roundNumber >= this.room.totalRounds) {
       this.endGame();
@@ -344,7 +342,7 @@ export class GameManager {
     this.room.roundNumber += 1;
     this.room.phase = "choosing";
     this.room.wordOptions = this.wordService.getRandomWords(
-      this.room.settings.wordOptionsCount
+      this.room.settings.wordChoices
     );
 
     this.logState("[ROUND_START]", {
@@ -353,7 +351,7 @@ export class GameManager {
     });
     this.logState("[DRAWER_ASSIGNED]", { drawerId });
 
-    const chooseDurationMs = this.room.settings.chooseDurationSec * 1000;
+    const chooseDurationMs = 10_000;
     this.room.chooseEndsAt = Date.now() + chooseDurationMs;
 
     this.io.to(this.room.code).emit("round_started", {
@@ -362,14 +360,14 @@ export class GameManager {
       totalRounds: this.room.totalRounds,
       drawerId,
       phase: this.room.phase,
-      chooseDurationSec: this.room.settings.chooseDurationSec
+      chooseDurationSec: Math.floor(chooseDurationMs / 1000)
     });
 
     const drawerSocketId = this.room.getPlayer(drawerId)?.socketId;
     if (drawerSocketId) {
       this.io.to(drawerSocketId).emit("word_options", {
         options: this.room.wordOptions,
-        chooseDurationSec: this.room.settings.chooseDurationSec
+        chooseDurationSec: Math.floor(chooseDurationMs / 1000)
       });
     }
 
@@ -422,7 +420,7 @@ export class GameManager {
   }
 
   private calculateGuessScore(timeLeftSec: number): number {
-    const duration = this.room.settings.roundDurationSec;
+    const duration = this.room.settings.drawTime;
     const ratio = duration > 0 ? timeLeftSec / duration : 0;
     const score = Math.round(SCORING.base + SCORING.bonus * ratio);
     return Math.max(score, SCORING.minGuessScore);
