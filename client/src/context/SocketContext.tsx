@@ -24,8 +24,19 @@ export const SocketProvider = ({ children }: { children: ReactNode }) => {
   const [lastError, setLastError] = useState<string | null>(null);
 
   useEffect(() => {
-    const url = resolveSocketUrl();
-    const nextSocket = createSocket(url);
+    let nextSocket: AppSocket | null = null;
+
+    try {
+      const url = resolveSocketUrl();
+      nextSocket = createSocket(url);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to resolve socket URL";
+      setSocket(null);
+      setStatus("disconnected");
+      setLastError(message);
+      console.error("[CLIENT][SOCKET] configuration error", { message });
+      return;
+    }
 
     setSocket(nextSocket);
     setStatus("connecting");
@@ -53,6 +64,9 @@ export const SocketProvider = ({ children }: { children: ReactNode }) => {
     nextSocket.on("connect_error", handleError);
 
     return () => {
+      if (!nextSocket) {
+        return;
+      }
       nextSocket.off("connect", handleConnect);
       nextSocket.off("disconnect", handleDisconnect);
       nextSocket.off("connect_error", handleError);
