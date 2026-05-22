@@ -2,6 +2,13 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useRoom } from "../hooks/useRoom";
 
+const featureHighlights = [
+  "Real-time drawing",
+  "Multiplayer rooms",
+  "Live guessing",
+  "Fast matchmaking"
+];
+
 export const HomePage = () => {
   const {
     room,
@@ -70,70 +77,90 @@ export const HomePage = () => {
   };
 
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 px-6 py-10">
-      <div>
-        <h1 className="text-3xl font-semibold text-slate-900">
-          Scribble Sync
-        </h1>
-        <p className="mt-2 max-w-xl text-sm text-slate-500">
-          Jump into a room, grab the pen, and race the clock. The server runs the game, you just play.
-        </p>
-      </div>
-
-      {socketError && socketErrorCode !== "NO_PUBLIC_ROOM_AVAILABLE" && (
-        <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-600">
-          {socketError}
-          <button
-            type="button"
-            onClick={clearSocketError}
-            className="ml-3 text-xs text-rose-500 underline"
-          >
-            Dismiss
-          </button>
-        </div>
-      )}
-
-      <div className="rounded-2xl border border-stone-200 bg-white p-6 shadow-sm">
-        <div className="mx-auto flex w-full max-w-sm flex-col items-center gap-5">
-          <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-            Player name
-          </label>
-          <input
-            type="text"
-            value={playerName}
-            onChange={(event) => setPlayerName(event.target.value)}
-            placeholder="Player name"
-            className="w-full max-w-xs rounded-xl border border-stone-200 bg-transparent px-3 py-2 text-center text-sm text-slate-900 transition-colors focus:outline-none focus:ring-2 focus:ring-orange-400"
-          />
-
-          <div className="flex w-full max-w-xs flex-col items-stretch gap-3">
+    <main className="min-h-[calc(100vh-4.5rem)] px-6 py-10 lg:py-14">
+      <div className="mx-auto w-full max-w-7xl">
+        {socketError && socketErrorCode !== "NO_PUBLIC_ROOM_AVAILABLE" && (
+          <div className="mb-8 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-600 shadow-sm">
+            {socketError}
             <button
               type="button"
-              onClick={handleQuickPlay}
-              className="w-full rounded-xl bg-orange-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-orange-600"
+              onClick={clearSocketError}
+              className="ml-3 text-xs text-rose-500 underline"
             >
-              Play
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveModal("join")}
-              className="w-full rounded-xl border border-stone-200 px-4 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-stone-50"
-            >
-              Join room
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setRoomVisibility("private");
-                setActiveModal("create");
-              }}
-              className="w-full rounded-xl border border-stone-200 px-4 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-stone-50"
-            >
-              Create room
+              Dismiss
             </button>
           </div>
+        )}
+
+        <div className="flex flex-col gap-12 lg:min-h-[calc(100vh-11rem)] lg:flex-row lg:items-center lg:gap-16">
+          <section className="flex w-full max-w-2xl flex-col items-center text-center lg:items-start lg:text-left">
+            <p className="text-xs font-semibold uppercase tracking-[0.35em] text-slate-500">
+              Scribble Sync
+            </p>
+            <h1 className="mt-4 max-w-2xl text-4xl font-semibold leading-tight text-slate-900 sm:text-5xl lg:text-6xl">
+              Draw together, <span className="text-orange-500">guess faster</span>.
+            </h1>
+            <p className="mt-5 max-w-xl text-base leading-7 text-slate-500 sm:text-lg">
+              Jump into a room, swap roles, and race the clock in a small multiplayer drawing game made for quick rounds with friends.
+            </p>
+
+            <div className="mt-8 flex flex-wrap justify-center gap-3 lg:justify-start">
+              {featureHighlights.map((feature) => (
+                <span
+                  key={feature}
+                  className="inline-flex items-center gap-2 rounded-full border border-stone-200 bg-white px-3 py-2 text-sm text-slate-600 shadow-sm"
+                >
+                  <span className="h-1.5 w-1.5 rounded-full bg-orange-500" />
+                  {feature}
+                </span>
+              ))}
+            </div>
+          </section>
+
+          <section className="flex w-full justify-center lg:w-105 lg:shrink-0 lg:justify-end">
+            <div className="w-full rounded-2xl border border-stone-200 bg-white p-6 shadow-sm sm:p-8">
+              <div className="mx-auto flex w-full max-w-sm flex-col items-center gap-5">
+                <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Player name
+                </label>
+                <input
+                  type="text"
+                  value={playerName}
+                  onChange={(event) => setPlayerName(event.target.value)}
+                  placeholder="Player name"
+                  className="w-full max-w-xs rounded-xl border border-stone-200 bg-transparent px-3 py-2 text-center text-sm text-slate-900 transition-colors focus:outline-none focus:ring-2 focus:ring-orange-400"
+                />
+
+                <div className="flex w-full max-w-xs flex-col items-stretch gap-3">
+                  <button
+                    type="button"
+                    onClick={handleQuickPlay}
+                    className="w-full rounded-xl bg-orange-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-orange-600"
+                  >
+                    Play
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveModal("join")}
+                    className="w-full rounded-xl border border-stone-200 px-4 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-stone-50"
+                  >
+                    Join room
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRoomVisibility("private");
+                      setActiveModal("create");
+                    }}
+                    className="w-full rounded-xl border border-stone-200 px-4 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-stone-50"
+                  >
+                    Create room
+                  </button>
+                </div>
+              </div>
+            </div>
+          </section>
         </div>
-      </div>
 
       {activeModal === "join" && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-6">
@@ -282,6 +309,7 @@ export const HomePage = () => {
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </main>
   );
 };
