@@ -3,41 +3,47 @@
 
 Scribble Sync is a real-time multiplayer drawing and guessing game (a skribbl.io style clone) implemented with React, TypeScript, Vite, TailwindCSS, Node.js, Express and Socket.IO. The code emphasizes a clear server-side game loop, stroke-based canvas sync, and room-based isolation.
 
-![tech:react](https://img.shields.io/badge/React-17.0.0-blue.svg) ![tech:typescript](https://img.shields.io/badge/TypeScript-4.x-blue.svg) ![tech:socket.io](https://img.shields.io/badge/Socket.IO-4.x-yellowgreen.svg) ![tech:node](https://img.shields.io/badge/Node.js-16.x-green.svg) ![tech:vite](https://img.shields.io/badge/Vite-4.x-lightgrey.svg)
+![React](https://img.shields.io/badge/React-20232A?style=flat-square&logo=react&logoColor=61DAFB) ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white) ![TailwindCSS](https://img.shields.io/badge/TailwindCSS-06B6D4?style=flat-square&logo=tailwindcss&logoColor=white) ![Vite](https://img.shields.io/badge/Vite-646CFF?style=flat-square&logo=vite&logoColor=white) ![Socket.IO](https://img.shields.io/badge/Socket.IO-010101?style=flat-square&logo=socket.io&logoColor=white) ![Node.js](https://img.shields.io/badge/Node.js-339933?style=flat-square&logo=nodedotjs&logoColor=white) ![Express](https://img.shields.io/badge/Express-000000?style=flat-square&logo=express&logoColor=white)
 
 ---
 
 ## Table of contents
- 
-- Quick overview
-- Live Demo
-- Why Scribble Sync exists
-- Features
-- Architecture
-- Request / Game lifecycle
-- Example gameplay flow
-- Engineering challenges
-- Project structure
-- Backend overview & key files
-- Frontend overview & key files
-- Socket.IO architecture
-- Canvas synchronization system
-- Multiplayer state management
-- Developer onboarding (local)
-- Deployment notes
-- Environment variables
-- Socket event overview
-- Design notes
-- Roadmap
-- License
-- Author
+
+- [Quick overview](#quick-overview)
+- [Live Demo](#live-demo)
+- [Why Scribble Sync exists](#why-scribble-sync-exists)
+- [Features](#features)
+- [Core multiplayer concepts](#core-multiplayer-concepts)
+- [Architecture](#architecture)
+- [Request / Game lifecycle](#request--game-lifecycle)
+- [Example gameplay flow](#example-gameplay-flow)
+- [Gameplay rules](#gameplay-rules)
+- [Engineering challenges](#engineering-challenges)
+- [Project structure](#project-structure)
+- [Backend overview & key files](#backend-overview--key-files)
+- [Frontend overview & key files](#frontend-overview--key-files)
+- [Socket.IO architecture](#socketio-architecture)
+- [Canvas synchronization system](#canvas-synchronization-system)
+- [Why stroke-based synchronization?](#why-stroke-based-synchronization)
+- [Why server-authoritative state?](#why-server-authoritative-state)
+- [Multiplayer state management](#multiplayer-state-management)
+- [Local multiplayer testing](#local-multiplayer-testing)
+- [Deployment notes](#deployment-notes)
+- [Environment variables](#environment-variables)
+- [Socket event overview](#socket-event-overview)
+- [Design notes](#design-notes)
+- [Known limitations](#known-limitations)
+- [Roadmap](#roadmap)
+- [License](#license)
+- [Author](#author)
+
 ## Quick overview
 
 The project is split into a TypeScript React frontend (Vite) and a Node/Express backend with Socket.IO. The server keeps canonical room and game state; clients render a local canvas, send compact stroke events, and receive server-authoritative updates for replay and catch-up.
 
 ## Live Demo
 
-[Link](https://scribble-sync-ivory.vercel.app/)
+Link:- [ https://scribble-sync-ivory.vercel.app/](https://scribble-sync-ivory.vercel.app/)
 
 ## Why Scribble Sync exists
 
@@ -57,26 +63,44 @@ The project is split into a TypeScript React frontend (Vite) and a Node/Express 
 
 ---
 
+## Core multiplayer concepts
+
+- Server-authoritative state: the server is the source of truth for room and game state; clients submit actions and render authoritative updates.
+- Room-scoped Socket.IO: each active game is represented as a Socket.IO room; broadcasts are scoped to the room for isolation and efficiency.
+- Stroke synchronization: drawing is transmitted as ordered stroke events (start/move/end) so clients can replay or reconstruct the canvas deterministically.
+- Reconnect & recovery: clients can rejoin with `playerId` and receive a `sync_state` payload including `strokeHistory` to rebuild canvas state.
+- Timer-driven rounds: server-side timers drive round transitions and hint ticks; clients rely on `timer_tick` for UI countdowns.
+- Matchmaking/visibility: public rooms are available to `quick_play`; private rooms require a room code to join.
+
+---
+
 ## Architecture
 
 System-level ASCII diagram:
 
 ```
-				 +----------------+
-				 |   Static Host  |  (optional frontend hosting)
-				 +----------------+
-					   |
-				   (HTTP / WebSocket)
-					   |
-    +----------------+     +----------------------+     +----------------+
-    |   Browser      |<--->|  Node + Express      |     |  In-memory     |
-    |  (React + Vite) |     |  + Socket.IO server  |     |  Room Store    |
-    +----------------+     +----------------------+     +----------------+
-					   |
-				   core modules
-				   (RoomManager, GameManager)
-					   |
-				 word lists (local JSON)
+                                 +----------------------+
+                                 |     Static Host      |
+                                 | (serves client app)  |
+                                 +----------+-----------+
+                                            |
+                                     HTTP / WebSocket
+                                            |
+                                            v
++----------------------+      +-----------------------------+      +----------------------+
+|      Browser         | <--> |     Node.js + Express +     | <--> |   In-Memory Room     |
+|  React + Vite Client |      |      Socket.IO Server       |      |        Store         |
++----------------------+      +--------------+--------------+      +----------------------+
+                                             |
+                                    Core game management
+                                (RoomManager, GameManager)
+                                             |
+                                             v
+                                   +------------------+
+                                   |   Local Word     |
+                                   |      Lists       |
+                                   |    (JSON files)  |
+                                   +------------------+
 ```
 
 Component interaction (simplified):
@@ -120,6 +144,16 @@ High-level steps:
 5. Bob draws; clients receive incremental strokes and render them.
 6. Carol makes correct guess; server awards points and notifies clients.
 7. Round ends, next drawer chosen, repeat until configured rounds complete.
+
+---
+
+## Gameplay rules
+
+- One drawer is assigned each round and receives word options to choose from.
+- Other players submit guesses via chat; correct guesses are detected server-side.
+- Correct guesses award points to the guesser and a drawer share; the server updates the leaderboard.
+- Rounds rotate automatically through connected players until the configured number of rounds completes.
+- The player with the highest total score at the end wins.
 
 ---
 
@@ -182,7 +216,7 @@ server/
 	└─ package.json
 ```
 
-Note: The project stores room and game state in memory by design. This keeps latency low for real-time interactions and keeps the code focused on synchronization logic rather than persistence. If you need durable history or cross-instance state, add a persistence layer and a Socket.IO adapter.
+Note: The project stores room and game state in memory by design. This keeps latency low for real-time interactions and keeps the code focused on synchronization logic rather than persistence. If you need durable history or cross-instance state, add a persistence layer and a mechanism to share Socket.IO events across processes.
 
 ---
 
@@ -220,17 +254,30 @@ Design notes:
 
 ## Canvas synchronization system
 
-Why stroke data instead of images
-- Stroke events are compact and semantic (x,y,pressure,thickness,color), allowing low bandwidth and deterministic replay.
+### Why stroke-based synchronization?
 
-Undo system
-- Implemented as a stroke-level operation: the client sends `undo` which the server validates (only drawer or allowed user) and removes the last stroke from the replay buffer, then emits an update to all clients to re-render from the buffer.
+- Lower bandwidth: strokes are compact (points, color, size) compared to image frames.
+- Deterministic replay: ordered stroke sequences can be replayed to exactly reconstruct a canvas state.
+- Undo support: removing or altering the last stroke is straightforward at the stroke level.
+- Reconnect-friendly: sending a bounded `strokeHistory` is cheaper and faster than transferring bitmaps.
 
-Replay system
-- Server persists an ordered list of stroke events per round in memory. On reconnect or join, the client requests the room's current round strokes and replays them locally to reconstruct canvas state.
+### Why server-authoritative state?
 
-Redraw logic
-- Clients render strokes in the order received. On state-catchup, clients clear canvas and replay from the server-provided stroke array to reach canonical state.
+- Prevents client-side desyncs: the server validates actions (drawer only, guess checks) and broadcasts canonical updates.
+- Reduces cheating surface: clients cannot unilaterally change scores or round progression.
+- Simplifies recovery: clients resync from server state on reconnect rather than attempting local conflict resolution.
+
+### Undo system
+
+- Implemented as a stroke-level operation: the client requests `draw_undo`, the server validates (drawer/permission) and removes the last stroke from `strokeHistory`, then broadcasts `draw_undo` to room clients.
+
+### Replay system
+
+- Server maintains an ordered `strokeHistory` per round in memory. On join or reconnect the server sends `sync_state` with `strokes` allowing clients to replay and reconstruct the canvas.
+
+### Redraw logic
+
+- Clients clear canvas and replay strokes in order. High-frequency `draw_move` messages are relayed for smoothness but only finalized into `strokeHistory` on `draw_end`.
 
 ---
 
@@ -243,6 +290,15 @@ Redraw logic
 - Reconnect handling: the server supports reconnection by `playerId` (or by matching a recently disconnected player name). On a successful reconnect the server rebinds the socket to the existing player record, emits `player_reconnected`/`player_joined`, and sends a `sync_state` payload containing room state and `strokeHistory` so the client can catch up. The client persists `playerId` and other small session fields to localStorage (`client/src/utils/storage.ts`) and `RoomContext` will include those values when attempting to rejoin, which enables a smoother reconnect flow.
 
 ---
+
+## Local multiplayer testing
+
+- Use multiple browser tabs to simulate players sharing the same origin and localStorage.
+- Use an incognito/private window for an isolated session that won't reuse saved `playerId` values.
+- Close and reopen a client to test reconnect flow and ensure `sync_state` rebuilds the canvas and restores room membership.
+- Verify drawing synchronization by having the drawer emit strokes and watching other clients render `draw_start`/`draw_move`/`draw_end` in real time.
+- Exercise room lifecycle by creating/joining/leaving rooms and observing `player_joined`/`player_left` and `host_changed` events.
+
 
 ## Developer onboarding (local development)
 
@@ -281,7 +337,7 @@ Environment
 
 - Frontend: deploy the `client/dist` build to Vercel or any static host. Vercel supports deploying Vite projects with minimal configuration.
 - Backend: Render (or similar) is recommended for Node+Socket.IO workloads. Use a single region for both frontend and backend to minimize latency.
-- WebSocket considerations: If you use a platform with sticky session requirements, ensure your Socket.IO configuration supports the chosen adapter. For multiple instances you will need an adapter (Redis adapter) — this repo presently runs a single process instance.
+- WebSocket considerations: Platforms that split traffic across instances may require an external mechanism to share Socket.IO events and room state across processes; this repository runs as a single process by default and does not include cross-process coordination.
 -- CORS: Allow the frontend origin via `CORS_ORIGIN` (`server/src/config/env.ts`) and configure Socket.IO `cors` so the browser can open WebSocket/HTTP long-polling connections.
 
 ---
@@ -361,7 +417,16 @@ Implementation notes:
 
 - Keep server state authoritative to avoid divergent client-side state and cheating.
 - Use compact stroke representation and optional batching to trade off bandwidth vs latency.
-- Avoid storing strokes indefinitely; keep only recent rounds in memory or move to a persistence layer when needed.
+- Favor bounded in-memory buffers for recent rounds; persist or archive externally when long-term history is required.
+
+---
+
+## Known limitations
+
+- In-memory state: rooms and stroke histories live in process memory and are lost on restart.
+- Single-process design: the repository does not include cross-process coordination; multi-instance deployments require a shared-state or messaging layer and persistence.
+- No archival storage: there's no built-in mechanism to export or permanently store stroke histories or past games.
+- Minimal moderation: this project focuses on core gameplay and lacks moderation or abuse-mitigation features.
 
 ---
 
@@ -379,11 +444,11 @@ Implementation notes:
 
 ## License
 
-This project is provided under the MIT License. See the `LICENSE` file for details.
+This project is provided under the MIT License.
 
----
 
 ## Author
 
 Apoorv Gupta
+
 
