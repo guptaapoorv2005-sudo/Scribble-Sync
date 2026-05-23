@@ -6,7 +6,6 @@ export const GAME_DEFAULTS = {
   wordChoices: 3,
   hintsEnabled: true,
   hintCount: 3,
-  wordMode: "normal" as const,
   maxNameLength: 20,
   maxMessageLength: 200,
   disconnectGraceMs: 60_000,

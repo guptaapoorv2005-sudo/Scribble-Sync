@@ -73,8 +73,7 @@ export const env = {
     1,
     10
   ),
-  wordMode: (process.env.WORD_MODE as "normal" | "hidden" | "combination" | undefined) ??
-    GAME_DEFAULTS.wordMode,
+  
   disconnectGraceMs: parseNumber(
     process.env.DISCONNECT_GRACE_MS,
     GAME_DEFAULTS.disconnectGraceMs,

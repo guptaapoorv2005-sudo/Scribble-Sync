@@ -21,8 +21,7 @@ const createRoomSchema = z.object({
       drawTime: z.number().int().min(15).max(240).optional(),
       wordChoices: z.number().int().min(1).max(5).optional(),
       hintsEnabled: z.boolean().optional(),
-      hintCount: z.number().int().min(1).max(10).optional(),
-      wordMode: z.enum(["normal", "hidden", "combination"]).optional()
+      hintCount: z.number().int().min(1).max(10).optional()
     })
     .partial()
     .optional()
@@ -129,8 +128,7 @@ const updateRoomSettingsSchema = z.object({
     drawTime: z.number().int().min(15).max(240),
     wordChoices: z.number().int().min(1).max(5),
     hintsEnabled: z.boolean(),
-    hintCount: z.number().int().min(0).max(10),
-    wordMode: z.enum(["normal", "hidden", "combination"])
+    hintCount: z.number().int().min(0).max(10)
   })
 });
 

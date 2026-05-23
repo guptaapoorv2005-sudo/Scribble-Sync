@@ -16,7 +16,7 @@ export interface RoomSettings {
   wordChoices: number;
   hintsEnabled: boolean;
   hintCount: number;
-  wordMode: "normal" | "hidden" | "combination";
+  
 }
 
 export interface LeaderboardEntry {

@@ -66,9 +66,6 @@ export const RoomSettingsPanel = ({ settings }: RoomSettingsPanelProps) => {
     setDraft((current) => ({ ...current, [key]: value }));
   };
 
-  const setWordMode = (value: RoomSettings["wordMode"]) => {
-    setDraft((current) => ({ ...current, wordMode: value }));
-  };
 
   const labelClass = "text-xs font-semibold uppercase tracking-wide text-slate-500";
 
@@ -184,19 +181,7 @@ export const RoomSettingsPanel = ({ settings }: RoomSettingsPanelProps) => {
           </select>
         </label>
 
-        <label className="space-y-2 sm:col-span-2">
-          <div className={labelClass}>Word Mode</div>
-          <select
-            value={draft.wordMode}
-            disabled={!isHost}
-            onChange={(event) => setWordMode(event.target.value as RoomSettings["wordMode"])}
-            className="w-full rounded-xl border border-stone-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-orange-400 disabled:cursor-not-allowed disabled:bg-stone-100"
-          >
-            <option value="normal">Normal</option>
-            <option value="hidden">Hidden</option>
-            <option value="combination">Combination</option>
-          </select>
-        </label>
+        
       </div>
 
       <div className="mt-4 text-xs text-slate-400">

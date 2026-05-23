@@ -68,8 +68,7 @@ export class RoomManager {
       drawTime: payload.settings?.drawTime ?? env.drawTime,
       wordChoices: payload.settings?.wordChoices ?? env.wordChoices,
       hintsEnabled: payload.settings?.hintsEnabled ?? env.hintsEnabled,
-      hintCount: payload.settings?.hintCount ?? env.hintCount,
-      wordMode: payload.settings?.wordMode ?? env.wordMode
+      hintCount: payload.settings?.hintCount ?? env.hintCount
     });
 
     const room = new Room({
@@ -796,7 +795,7 @@ export class RoomManager {
       wordChoices: this.clampInt(settings.wordChoices ?? env.wordChoices, 1, 5),
       hintsEnabled: Boolean(settings.hintsEnabled ?? env.hintsEnabled),
       hintCount: this.clampInt(settings.hintCount ?? env.hintCount, 1, 10),
-      wordMode: this.normalizeWordMode(settings.wordMode ?? env.wordMode)
+      
     };
 
     if (normalized.maxPlayers < currentPlayerCount) {
@@ -806,12 +805,7 @@ export class RoomManager {
     return normalized;
   }
 
-  private normalizeWordMode(
-    value: RoomSettings["wordMode"] | string
-  ): RoomSettings["wordMode"] {
-    if (value === "hidden" || value === "combination") return value;
-    return "normal";
-  }
+  
 
   private clampInt(value: number, min: number, max: number): number {
     const rounded = Math.round(value);
